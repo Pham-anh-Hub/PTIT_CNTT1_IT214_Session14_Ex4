@@ -9,14 +9,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PaymentServiceSaga {
-    // Lưu trữ số dư ví của khách hàng (CustomerId -> Balance)
     private final Map<String, BigDecimal> customerWallets = new ConcurrentHashMap<>();
 
     public PaymentServiceSaga() {
-        // Nạp dữ liệu mẫu
-        customerWallets.put("CUST-001", new BigDecimal("1000000")); // 1,000,000 VND
-        customerWallets.put("CUST-002", new BigDecimal("50000"));   // 50,000 VND
-
+        customerWallets.put("CUST-001", new BigDecimal("1000000"));
+        customerWallets.put("CUST-002", new BigDecimal("50000"));
         registerListeners();
     }
 
@@ -29,65 +26,61 @@ public class PaymentServiceSaga {
     }
 
     private void registerListeners() {
-        // 1. Lắng nghe OrderCreatedEvent từ Order Service
-        EventBroker.subscribe("order-created-topic", event -> {
-            if (event instanceof OrderCreatedEvent) {
-                handleOrderCreated((OrderCreatedEvent) event);
+        // Lắng nghe VoucherAppliedEvent (tiếp sau khi Voucher Service tính giảm giá xong)
+        EventBroker.subscribe("voucher-applied-topic", event -> {
+            if (event instanceof VoucherAppliedEvent voucherEvent) {
+                handleVoucherApplied(voucherEvent);
             }
         });
 
-        // 2. Lắng nghe CompensatePaymentEvent (Yêu cầu hoàn tiền từ Order Service)
+        // Lắng nghe CompensatePaymentEvent (Yêu cầu hoàn tiền từ Order Service)
         EventBroker.subscribe("compensate-payment-topic", event -> {
-            if (event instanceof CompensatePaymentEvent) {
-                handleCompensatePayment((CompensatePaymentEvent) event);
+            if (event instanceof CompensatePaymentEvent compensateEvent) {
+                handleCompensatePayment(compensateEvent);
             }
         });
     }
 
-    private void handleOrderCreated(OrderCreatedEvent event) {
-        System.out.println("[PAYMENT SERVICE] Nhận OrderCreatedEvent cho đơn hàng: " + event.getOrderId());
+    private void handleVoucherApplied(VoucherAppliedEvent event) {
+        System.out.println("[PAYMENT-SAGA] Nhận VoucherAppliedEvent cho đơn: " + event.getOrderId()
+                + " | Số tiền sau giảm giá: " + event.getFinalAmount());
+
         BigDecimal currentBalance = getCustomerBalance(event.getCustomerId());
 
-        if (currentBalance.compareTo(event.getTotalAmount()) >= 0) {
-            // Trừ tiền
-            BigDecimal newBalance = currentBalance.subtract(event.getTotalAmount());
+        if (currentBalance.compareTo(event.getFinalAmount()) >= 0) {
+            BigDecimal newBalance = currentBalance.subtract(event.getFinalAmount());
             customerWallets.put(event.getCustomerId(), newBalance);
             String paymentId = "PAY-" + UUID.randomUUID().toString().substring(0, 8);
 
-            System.out.println("[PAYMENT SERVICE] Trừ tiền THÀNH CÔNG cho khách hàng " + event.getCustomerId()
-                    + " | Trừ: " + event.getTotalAmount() + " | Số dư mới: " + newBalance);
+            System.out.println("[PAYMENT-SAGA] Trừ tiền THÀNH CÔNG khách " + event.getCustomerId()
+                    + " | Số tiền trừ: " + event.getFinalAmount() + " | Số dư còn lại: " + newBalance);
 
-            // Bắn PaymentSuccessEvent
             PaymentSuccessEvent paymentSuccessEvent = PaymentSuccessEvent.builder()
                     .orderId(event.getOrderId())
                     .customerId(event.getCustomerId())
                     .paymentId(paymentId)
-                    .amountDeducted(event.getTotalAmount())
+                    .amountDeducted(event.getFinalAmount())
                     .shippingAddress(event.getShippingAddress())
                     .timestamp(System.currentTimeMillis())
                     .build();
 
             EventBroker.publish("payment-success-topic", paymentSuccessEvent);
         } else {
-            System.out.println("[PAYMENT SERVICE] Khách hàng " + event.getCustomerId() + " KHÔNG ĐỦ TIỀN thanh toán đơn hàng " + event.getOrderId());
-            // Có thể phát PaymentFailedEvent nếu cần
+            System.out.println("[PAYMENT-SAGA] Khách " + event.getCustomerId() + " KHÔNG ĐỦ TIỀN thanh toán đơn " + event.getOrderId());
         }
     }
 
     private void handleCompensatePayment(CompensatePaymentEvent event) {
-        System.out.println("[PAYMENT SERVICE] [COMPENSATION] Nhận CompensatePaymentEvent cho đơn hàng: "
-                + event.getOrderId() + " | Lý do: " + event.getReason());
+        System.out.println("[PAYMENT-SAGA] [COMPENSATION] Hoàn tiền đơn: " + event.getOrderId() + " | Lý do: " + event.getReason());
 
-        // Hoàn tiền lại cho khách hàng
         BigDecimal currentBalance = getCustomerBalance(event.getCustomerId());
         BigDecimal newBalance = currentBalance.add(event.getRefundAmount());
         customerWallets.put(event.getCustomerId(), newBalance);
 
         String refundId = "REFUND-" + UUID.randomUUID().toString().substring(0, 8);
-        System.out.println("[PAYMENT SERVICE] HOÀN TIỀN THÀNH CÔNG cho khách " + event.getCustomerId()
-                + " | Hoàn lại: " + event.getRefundAmount() + " | Số dư sau hoàn: " + newBalance);
+        System.out.println("[PAYMENT-SAGA] HOÀN TIỀN THÀNH CÔNG khách " + event.getCustomerId()
+                + " | Số tiền hoàn: " + event.getRefundAmount() + " | Số dư mới: " + newBalance);
 
-        // Bắn RefundSuccessEvent
         RefundSuccessEvent refundSuccessEvent = RefundSuccessEvent.builder()
                 .orderId(event.getOrderId())
                 .customerId(event.getCustomerId())

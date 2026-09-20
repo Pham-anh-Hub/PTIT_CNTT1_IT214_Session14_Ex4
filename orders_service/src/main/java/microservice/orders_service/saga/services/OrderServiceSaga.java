@@ -73,6 +73,13 @@ public class OrderServiceSaga {
     }
 
     private void registerListeners() {
+        // 0. Lắng nghe VoucherAppliedEvent từ Voucher Service
+        EventBroker.subscribe("voucher-applied-topic", event -> {
+            if (event instanceof VoucherAppliedEvent voucherEvent) {
+                handleVoucherApplied(voucherEvent);
+            }
+        });
+
         // 1. Lắng nghe PaymentSuccessEvent từ Payment Service
         EventBroker.subscribe("payment-success-topic", event -> {
             if (event instanceof PaymentSuccessEvent) {
@@ -100,6 +107,16 @@ public class OrderServiceSaga {
                 handleRefundSuccess((RefundSuccessEvent) event);
             }
         });
+    }
+
+    private void handleVoucherApplied(VoucherAppliedEvent event) {
+        OrderRecord order = orderRepository.get(event.getOrderId());
+        if (order != null) {
+            order.setTotalAmount(event.getFinalAmount());
+            order.setUpdatedAt(System.currentTimeMillis());
+            System.out.println("[ORDER SERVICE] Nhận VoucherAppliedEvent | Cập nhật tổng tiền đơn " + order.getOrderId()
+                    + " thành: " + event.getFinalAmount() + " VNĐ (Đã giảm: " + event.getDiscountAmount() + " VNĐ)");
+        }
     }
 
     private void handlePaymentSuccess(PaymentSuccessEvent event) {
