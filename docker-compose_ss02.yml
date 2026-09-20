@@ -1,0 +1,161 @@
+services:
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: session02_demo-kafka-1
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_LISTENERS: >
+        INTERNAL://0.0.0.0:29092,
+        EXTERNAL://0.0.0.0:9092,
+        CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: >
+        INTERNAL://kafka:29092,
+        EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >
+        INTERNAL:PLAINTEXT,
+        EXTERNAL:PLAINTEXT,
+        CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+
+  redis:
+    image: redis:latest
+    container_name: session02_demo-redis-1
+    ports:
+      - "6379:6379"
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+
+  # 1. Database cho Users Service
+  mysql-users:
+    image: mysql:8.4
+    container_name: session02_demo-mysql-users
+    ports:
+      - "3307:3306" # Trỏ port 3307 ở máy host vào 3306 của container
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: users_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: 123456789
+    volumes:
+      - mysql-users-data:/var/lib/mysql
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+
+  # 2. Database cho Products Service
+  mysql-products:
+    image: mysql:8.4
+    container_name: session02_demo-mysql-products
+    ports:
+      - "3308:3306" # Trỏ port 3308 ở máy host vào 3306 của container
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: products_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: 123456789
+    volumes:
+      - mysql-products-data:/var/lib/mysql
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+
+  # 3. Database cho Orders Service
+  mysql-orders:
+    image: mysql:8.4
+    container_name: session02_demo-mysql-orders
+    ports:
+      - "3311:3306" # Trỏ port 3311 ở máy host vào 3306 của container
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orders_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: 123456789
+    volumes:
+      - mysql-orders-data:/var/lib/mysql
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # 4. Database cho Payment Service
+  mysql-payment:
+    image: mysql:8.4
+    container_name: session02_demo-mysql-payment
+    ports:
+      - "3310:3306" # Trỏ port 3307 ở máy host vào 3306 của container
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: payment_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: 123456789
+    volumes:
+      - mysql-payment-data:/var/lib/mysql
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # 5. Database cho Inventory Service
+  mysql-inventory:
+    image: mysql:8.4
+    container_name: session02_demo-mysql-inventory
+    ports:
+      - "3315:3306" # Trỏ port 3307 ở máy host vào 3306 của container
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: inventory_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: 123456789
+    volumes:
+      - mysql-inventory-data:/var/lib/mysql
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+  # 6. Database cho Notification Service
+  mysql-notification:
+    image: mysql:8.4
+    container_name: session02_demo-mysql-notification
+    ports:
+      - "3316:3306" # Trỏ port 3307 ở máy host vào 3306 của container
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: notification_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: 123456789
+    volumes:
+      - mysql-notification-data:/var/lib/mysql
+    networks:
+      - microservice-network
+    restart: unless-stopped
+
+
+networks:
+  microservice-network:
+    driver: bridge
+
+
+# Khai báo các volume độc lập để dữ liệu của 3 DB không bị ghi đè lên nhau
+volumes:
+  mysql-users-data:
+  mysql-products-data:
+  mysql-orders-data:
+  mysql-notification-data:
+  mysql-payment-data:
+  mysql-inventory-data:
